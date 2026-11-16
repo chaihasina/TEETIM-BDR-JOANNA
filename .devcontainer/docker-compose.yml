@@ -1,20 +1,50 @@
-{
-  "name": "TeeTIM - PHP 8.3 + MySQL 8 + phpMyAdmin",
-  "dockerComposeFile": "docker-compose.yml",
-  "service": "app",
-  "workspaceFolder": "/var/www/html",
-  "forwardPorts": [8080, 8081],
-  "portsAttributes": {
-    "8080": { "label": "Site TeeTIM", "onAutoForward": "openBrowser" },
-    "8081": { "label": "phpMyAdmin", "onAutoForward": "notify" }
-  },
-  "hostRequirements": { "cpus": 2 },
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "bmewburn.vscode-intelephense-client",
-        "cweijan.vscode-mysql-client2"
-      ]
-    }
-  }
-}
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/var/www/html:cached
+    ports:
+      - "8080:80"
+    environment:
+      DB_HOST: db
+      DB_NAME: ${DB_NAME:-teetim}
+      DB_USER: ${DB_USER:-teetim}
+      DB_PASS: ${DB_PASS:-teetim}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:-root}
+      MYSQL_DATABASE: ${DB_NAME:-teetim}
+      MYSQL_USER: ${DB_USER:-teetim}
+      MYSQL_PASSWORD: ${DB_PASS:-teetim}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  phpmyadmin:
+    image: phpmyadmin:5
+    restart: unless-stopped
+    environment:
+      PMA_HOST: db
+      PMA_USER: root
+      PMA_PASSWORD: ${DB_ROOT_PASS:-root}
+    ports:
+      - "8081:80"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
